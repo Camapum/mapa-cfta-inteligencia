@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mapa Mental Interativo | CFTA</title>
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root{
+    --green:#174f3a;
+    --green-2:#236449;
+    --green-soft:#eaf4ef;
+    --gold:#c8a85a;
+    --ink:#18201c;
+    --muted:#66736d;
+    --line:#dce5df;
+    --bg:#f6f7f5;
+    --card:#ffffff;
+    --shadow-sm:0 8px 20px rgba(20,40,30,.06);
+    --radius:16px;
+
+    --c-tema:#2f6fdb;
+    --c-tema-soft:#eaf1fd;
+    --c-norma:#7a4fb0;
+    --c-norma-soft:#f3edfa;
+    --c-proposicao:#e0672b;
+    --c-proposicao-soft:#fdeee5;
+    --c-orgao:#1f8a52;
+    --c-orgao-soft:#e8f6ee;
+    --c-ator:#6b7280;
+    --c-ator-soft:#eef0f2;
+    --c-pauta:#b8860b;
+    --c-pauta-soft:#fdf3d9;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+  }
+  button,input,select{font:inherit}
+  button{cursor:pointer}
+
+  header{
+    background:#fff;
+    border-bottom:1px solid var(--line);
+    padding:12px 20px;
+    box-shadow:var(--shadow-sm);
+    z-index:5;
+  }
+  .titlebar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+  .titlebar h1{font-size:18px;margin:0;letter-spacing:-.02em;color:var(--green)}
+  .titlebar p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+  #status{font-size:12px;color:var(--muted);font-weight:700}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .search-box{position:relative;flex:1 1 240px;min-width:220px}
+  .search-box input{
+    width:100%;border:1px solid var(--line);border-radius:999px;
+    padding:9px 14px 9px 34px;background:#fbfcfb;outline:none;font-size:13px;
+  }
+  .search-box input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(23,79,58,.10)}
+  .search-box::before{
+    content:"🔍";position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12px;opacity:.6;
+  }
+
+  details.filter-group{
+    border:1px solid var(--line);border-radius:12px;background:#fbfcfb;position:relative;
+  }
+  details.filter-group summary{
+    list-style:none;cursor:pointer;padding:8px 14px;font-size:12.5px;font-weight:800;
+    color:var(--green);display:flex;align-items:center;gap:6px;user-select:none;white-space:nowrap;
+  }
+  details.filter-group summary::-webkit-details-marker{display:none}
+  details.filter-group summary::after{content:"▾";font-size:10px;opacity:.6;margin-left:2px}
+  details.filter-group[open] summary::after{content:"▴"}
+  .filter-panel{
+    position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);
+    border-radius:12px;box-shadow:0 14px 30px rgba(20,40,30,.14);padding:10px;
+    max-height:320px;overflow:auto;z-index:20;min-width:220px;
+  }
+  .filter-panel label{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 6px;border-radius:8px;color:#3a453f;
+    white-space:nowrap;
+  }
+  .filter-panel label:hover{background:var(--green-soft)}
+  .filter-panel .panel-actions{display:flex;gap:6px;padding:4px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+  .mini-link{font-size:11px;font-weight:800;color:var(--green);background:none;border:0;padding:2px 4px}
+  .mini-link:hover{text-decoration:underline}
+  .swatch{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+
+  .btn{
+    border-radius:999px;padding:8px 14px;font-weight:800;font-size:12.5px;
+    background:var(--green);color:#fff;border:0;box-shadow:0 6px 14px rgba(23,79,58,.16);
+    white-space:nowrap;
+  }
+  .btn:hover{background:var(--green-2)}
+  .btn.secondary{background:#fff;color:var(--green);border:1px solid var(--line);box-shadow:none}
+  .btn.secondary:hover{background:var(--green-soft)}
+  .btn.active{outline:2px solid var(--gold);outline-offset:1px}
+
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+  main{
+    flex:1;display:flex;min-height:0;
+  }
+  #network-wrap{flex:1;position:relative;min-width:0}
+  #network{width:100%;height:100%;background:
+    radial-gradient(circle at 20% 10%, #f2f7f3 0, transparent 40%), #fbfcfa;}
+
+  #legend{
+    position:absolute;left:14px;bottom:14px;background:rgba(255,255,255,.94);
+    border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow-sm);
+    font-size:11.5px;display:grid;gap:5px;z-index:4;
+  }
+  #legend .item{display:flex;align-items:center;gap:7px;color:#3a453f}
+  #legend .dot{width:10px;height:10px;border-radius:50%}
+  #legend b{font-size:11px;color:var(--green);letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px}
+
+  #loading{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:10px;background:#fbfcfa;z-index:6;color:var(--muted);font-size:13px;
+  }
+  .spinner{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  aside#sidepanel{
+    width:320px;flex:0 0 320px;background:#fff;border-left:1px solid var(--line);
+    padding:18px;overflow-y:auto;
+  }
+  aside#sidepanel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin:0 0 12px}
+  .empty-panel{color:var(--muted);font-size:13px;line-height:1.6;padding-top:8px}
+  .detail-card{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fbfcfb}
+  .detail-card .type-pill{
+    display:inline-block;font-size:10.5px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;
+    padding:4px 10px;border-radius:999px;margin-bottom:10px;color:#fff;
+  }
+  .detail-card h3{margin:0 0 10px;font-size:16px;line-height:1.3;color:var(--ink)}
+  .field{margin-bottom:10px}
+  .field label{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
+  .field div.val{font-size:13px;line-height:1.5;color:#2c3733;word-break:break-word}
+  .badge{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:999px;background:var(--green-soft);color:var(--green)}
+  .badge.empty{background:#f1f3f1;color:var(--muted);font-weight:600}
+  .pauta-banner{
+    background:var(--c-pauta-soft);border:1px solid var(--c-pauta);color:#6b4a06;
+    border-radius:10px;padding:8px 10px;font-size:12px;font-weight:700;line-height:1.4;margin-bottom:12px;
+  }
+
+  #countbar{
+    position:absolute;top:14px;right:14px;background:rgba(255,255,255,.94);border:1px solid var(--line);
+    border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:800;color:var(--green);box-shadow:var(--shadow-sm);z-index:4;
+  }
+
+  @media (max-width:900px){
+    aside#sidepanel{position:fixed;right:0;top:0;bottom:0;z-index:30;box-shadow:-10px 0 30px rgba(0,0,0,.15)}
+    main{position:relative}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titlebar">
+    <div>
+      <h1>Mapa Mental e Fluxograma Interativo do CFTA</h1>
+      <p>Pautas estratégicas, temas, normas, proposições, órgãos e atores — relações legislativas e institucionais</p>
+    </div>
+    <div id="status">Carregando grafo…</div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Buscar por id, label ou descrição…" />
+    </div>
+
+    <details class="filter-group" id="fg-tipo">
+      <summary>Tipo do nó</summary>
+      <div class="filter-panel" id="panel-tipo"></div>
+    </details>
+
+    <details class="filter-group" id="fg-relevancia">
+      <summary>Relevância</summary>
+      <div class="filter-panel" id="panel-relevancia"></div>
+    </details>
+
+    <details class="filter-group" id="fg-prioridade">
+      <summary>Prioridade</summary>
+      <div class="filter-panel" id="panel-prioridade"></div>
+    </details>
+
+    <details class="filter-group" id="fg-grupo">
+      <summary>Grupo</summary>
+      <div class="filter-panel" id="panel-grupo"></div>
+    </details>
+
+    <details class="filter-group" id="fg-relacao">
+      <summary>Tipo de relação</summary>
+      <div class="filter-panel" id="panel-relacao"></div>
+    </details>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" id="btn-showall">Mostrar tudo</button>
+    <button class="btn secondary" id="btn-hideweak">Ocultar relações fracas</button>
+    <button class="btn secondary" id="btn-proposicoes">Mostrar apenas proposições prioritárias</button>
+    <button class="btn secondary" id="btn-normas">Mostrar apenas normas críticas</button>
+    <button class="btn secondary" id="btn-pautas">Mostrar pautas estratégicas</button>
+    <button class="btn secondary" id="btn-reset">Resetar visualização</button>
+  </div>
+</header>
+
+<main>
+  <div id="network-wrap">
+    <div id="network"></div>
+    <div id="countbar">—</div>
+    <div id="legend">
+      <b>Legenda</b>
+      <div class="item"><span class="dot" style="background:var(--c-tema)"></span>Tema</div>
+      <div class="item"><span class="dot" style="background:var(--c-norma)"></span>Norma</div>
+      <div class="item"><span class="dot" style="background:var(--c-proposicao)"></span>Proposição</div>
+      <div class="item"><span class="dot" style="background:var(--c-orgao)"></span>Órgão</div>
+      <div class="item"><span class="dot" style="background:var(--c-ator)"></span>Ator</div>
+      <div class="item"><span class="dot" style="background:var(--c-pauta)"></span>Pauta estratégica</div>
+    </div>
+    <div id="loading">
+      <div class="spinner"></div>
+      <div>Carregando ./grafo-cfta.json…</div>
+    </div>
+  </div>
+
+  <aside id="sidepanel">
+    <h2>Detalhes</h2>
+    <div id="panel-content">
+      <div class="empty-panel">Clique em um nó ou em uma relação do grafo para ver os detalhes aqui.</div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  var TYPE_COLORS = {
+    tema:       { color: "#2f6fdb", soft: "#eaf1fd" },
+    norma:      { color: "#7a4fb0", soft: "#f3edfa" },
+    proposicao: { color: "#e0672b", soft: "#fdeee5" },
+    orgao:      { color: "#1f8a52", soft: "#e8f6ee" },
+    ator:       { color: "#6b7280", soft: "#eef0f2" },
+    pauta:      { color: "#b8860b", soft: "#fdf3d9" }
+  };
+  var TYPE_LABELS = {
+    tema: "Tema", norma: "Norma", proposicao: "Proposição", orgao: "Órgão", ator: "Ator", pauta: "Pauta Estratégica"
+  };
+  var TYPE_BASE_SIZE = { tema: 20, orgao: 18, ator: 14, norma: 16, proposicao: 16, pauta: 26 };
+
+  var EDGE_COLORS = {
+    norma_trata_de_tema:              "#7a4fb0",
+    proposicao_impacta_tema:          "#e0672b",
+    orgao_relacionado_ao_tema:        "#1f8a52",
+    cfta_fundamenta_em_norma_critica: "#b0304f",
+    cfta_monitora_proposicao_prioritaria: "#c8912b",
+    proposicao_tramita_em_orgao:      "#3a7d97",
+    pauta_relaciona_tema:             "#b8860b",
+    pauta_relaciona_norma:            "#b8860b",
+    pauta_relaciona_proposicao:       "#b8860b",
+    cfta_acompanha_pauta_estrategica: "#8a5a00"
+  };
+  var EDGE_LABELS = {
+    norma_trata_de_tema: "Norma trata de tema",
+    proposicao_impacta_tema: "Proposição impacta tema",
+    orgao_relacionado_ao_tema: "Órgão relacionado ao tema",
+    cfta_fundamenta_em_norma_critica: "CFTA fundamenta em norma crítica",
+    cfta_monitora_proposicao_prioritaria: "CFTA monitora proposição prioritária",
+    proposicao_tramita_em_orgao: "Proposição tramita em órgão",
+    pauta_relaciona_tema: "Pauta relaciona tema",
+    pauta_relaciona_norma: "Pauta relaciona norma",
+    pauta_relaciona_proposicao: "Pauta relaciona proposição",
+    cfta_acompanha_pauta_estrategica: "CFTA acompanha pauta estratégica"
+  };
+
+  function normalize(s){
+    return (s || "").toString().trim().toLowerCase()
+      .normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "");
+  }
+  function escapeHtml(s){
+    return (s == null ? "" : String(s)).replace(/[&<>"']/g, function(c){
+      return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+    });
+  }
+
+  var rawNodes = [];
+  var rawEdges = [];
+  var pautaNeighborIds = new Set();
+  var nodesDataSet, edgesDataSet, nodesView, edgesView;
+  var network;
+
+  var state = {
+    search: "",
+    tipos: new Set(),
+    relevancias: new Set(),
+    prioridades: new Set(),
+    grupos: new Set(),
+    relacoes: new Set(),
+    hideWeak: false,
+    onlyPautaNetwork: false
+  };
+
+  function computePautaNeighborIds(){
+    var pautaIds = new Set();
+    rawNodes.forEach(function(n){ if(n.tipo === "pauta") pautaIds.add(n.id); });
+    var neighborIds = new Set(pautaIds);
+    rawEdges.forEach(function(e){
+      if(pautaIds.has(e.source)) neighborIds.add(e.target);
+      if(pautaIds.has(e.target)) neighborIds.add(e.source);
+    });
+    return neighborIds;
+  }
+
+  var optionsCache = {};
+
+  function setAll(set, options){
+    set.clear();
+    options.forEach(function(o){ set.add(o.value); });
+  }
+
+  function buildFilterPanel(containerId, options, selectedSet, onChange, swatchColorFn){
+    var el = document.getElementById(containerId);
+    el.innerHTML = "";
+
+    var actions = document.createElement("div");
+    actions.className = "panel-actions";
+    var allBtn = document.createElement("button");
+    allBtn.type = "button"; allBtn.className = "mini-link"; allBtn.textContent = "Todos";
+    allBtn.onclick = function(){
+      options.forEach(function(o){ selectedSet.add(o.value); });
+      renderChecks();
+      onChange();
+    };
+    var noneBtn = document.createElement("button");
+    noneBtn.type = "button"; noneBtn.className = "mini-link"; noneBtn.textContent = "Nenhum";
+    noneBtn.onclick = function(){
+      selectedSet.clear();
+      renderChecks();
+      onChange();
+    };
+    actions.appendChild(allBtn);
+    actions.appendChild(noneBtn);
+    el.appendChild(actions);
+
+    var listWrap = document.createElement("div");
+    el.appendChild(listWrap);
+
+    function renderChecks(){
+      listWrap.innerHTML = "";
+      options.forEach(function(opt){
+        var label = document.createElement("label");
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = selectedSet.has(opt.value);
+        cb.addEventListener("change", function(){
+          if(cb.checked) selectedSet.add(opt.value); else selectedSet.delete(opt.value);
+          onChange();
+        });
+        label.appendChild(cb);
+        if(swatchColorFn){
+          var sw = document.createElement("span");
+          sw.className = "swatch";
+          sw.style.background = swatchColorFn(opt.value);
+          label.appendChild(sw);
+        }
+        var txt = document.createElement("span");
+        txt.textContent = opt.label;
+        label.appendChild(txt);
+        listWrap.appendChild(label);
+      });
+    }
+    renderChecks();
+  }
+
+  function refreshViews(){
+    nodesView.refresh();
+    edgesView.refresh();
+    updateCountBar();
+  }
+
+  function nodeVisible(node){
+    if(state.onlyPautaNetwork && !pautaNeighborIds.has(node.id)) return false;
+    if(!state.tipos.has(node.tipo)) return false;
+    if(state.grupos.size && node.grupo && !state.grupos.has(node.grupo)) return false;
+
+    if(node.relevancia){
+      if(!state.relevancias.has(normalize(node.relevancia))) return false;
+    }
+    if(node.prioridade){
+      if(!state.prioridades.has(normalize(node.prioridade))) return false;
+    }
+
+    if(state.search){
+      var s = state.search;
+      var hay = normalize(node.id) + " " + normalize(node.label) + " " + normalize(node.descricao);
+      if(hay.indexOf(s) === -1) return false;
+    }
+    return true;
+  }
+
+  function edgeVisible(edge){
+    if(!state.relacoes.has(edge.tipo)) return false;
+    if(state.hideWeak && edge.peso <= 2) return false;
+    var sourceNode = nodesDataSet.get(edge.source);
+    var targetNode = nodesDataSet.get(edge.target);
+    if(!sourceNode || !targetNode) return false;
+    if(state.onlyPautaNetwork && sourceNode.tipo !== "pauta" && targetNode.tipo !== "pauta") return false;
+    return nodeVisible(sourceNode) && nodeVisible(targetNode);
+  }
+
+  function updateCountBar(){
+    var nCount = nodesView.length;
+    var eCount = edgesView.length;
+    document.getElementById("countbar").textContent = nCount + " nós · " + eCount + " relações visíveis";
+  }
+
+  function showEmptyPanel(){
+    document.getElementById("panel-content").innerHTML =
+      '<div class="empty-panel">Clique em um nó ou em uma relação do grafo para ver os detalhes aqui.</div>';
+  }
+
+  function fieldRow(labelText, valueHtml){
+    return '<div class="field"><label>' + escapeHtml(labelText) + '</label><div class="val">' + valueHtml + '</div></div>';
+  }
+
+  function badgeOrEmpty(v){
+    if(!v) return '<span class="badge empty">não definido</span>';
+    return '<span class="badge">' + escapeHtml(v) + '</span>';
+  }
+
+  function showNodePanel(node){
+    var colors = TYPE_COLORS[node.tipo] || TYPE_COLORS.ator;
+    var html = '<div class="detail-card">';
+    html += '<span class="type-pill" style="background:' + colors.color + '">' + escapeHtml(TYPE_LABELS[node.tipo] || node.tipo) + '</span>';
+    html += '<h3>' + escapeHtml(node.label) + '</h3>';
+    if(node.tipo === "pauta"){
+      html += '<div class="pauta-banner">⭐ Frente institucional estratégica do CFTA — reúne temas, normas e proposições relacionados que exigem acompanhamento e ação do Conselho.</div>';
+    }
+    html += fieldRow("ID", escapeHtml(node.id));
+    html += fieldRow("Label", escapeHtml(node.label));
+    html += fieldRow("Tipo", escapeHtml(TYPE_LABELS[node.tipo] || node.tipo));
+    html += fieldRow("Grupo", node.grupo ? escapeHtml(node.grupo) : '<span class="badge empty">não definido</span>');
+    html += fieldRow("Descrição", node.descricao ? escapeHtml(node.descricao) : '<span class="badge empty">sem descrição</span>');
+    html += fieldRow("Relevância", badgeOrEmpty(node.relevancia));
+    html += fieldRow("Prioridade", badgeOrEmpty(node.prioridade));
+    html += '</div>';
+    document.getElementById("panel-content").innerHTML = html;
+  }
+
+  function showEdgePanel(edge){
+    var color = EDGE_COLORS[edge.tipo] || "#666";
+    var sourceNode = nodesDataSet.get(edge.source);
+    var targetNode = nodesDataSet.get(edge.target);
+    var html = '<div class="detail-card">';
+    html += '<span class="type-pill" style="background:' + color + '">Relação</span>';
+    html += '<h3>' + escapeHtml(EDGE_LABELS[edge.tipo] || edge.tipo) + '</h3>';
+    html += fieldRow("ID", escapeHtml(edge.id));
+    html += fieldRow("Origem (source)", escapeHtml(edge.source) + (sourceNode ? " — " + escapeHtml(sourceNode.label) : ""));
+    html += fieldRow("Destino (target)", escapeHtml(edge.target) + (targetNode ? " — " + escapeHtml(targetNode.label) : ""));
+    html += fieldRow("Tipo", escapeHtml(EDGE_LABELS[edge.tipo] || edge.tipo));
+    html += fieldRow("Peso", '<span class="badge">' + escapeHtml(edge.peso) + '</span>');
+    html += fieldRow("Descrição", edge.descricao ? escapeHtml(edge.descricao) : '<span class="badge empty">sem descrição</span>');
+    html += '</div>';
+    document.getElementById("panel-content").innerHTML = html;
+  }
+
+  function computeOptionsCache(){
+    optionsCache.tipos = Object.keys(TYPE_LABELS).map(function(t){ return { value: t, label: TYPE_LABELS[t] }; });
+
+    var relevanciaVals = {};
+    rawNodes.forEach(function(n){ if(n.relevancia) relevanciaVals[normalize(n.relevancia)] = n.relevancia; });
+    optionsCache.relevancias = Object.keys(relevanciaVals).sort().map(function(k){
+      return { value: k, label: relevanciaVals[k] };
+    });
+
+    var prioridadeVals = {};
+    rawNodes.forEach(function(n){ if(n.prioridade) prioridadeVals[normalize(n.prioridade)] = n.prioridade; });
+    optionsCache.prioridades = Object.keys(prioridadeVals).sort().map(function(k){
+      return { value: k, label: prioridadeVals[k] };
+    });
+
+    var grupoSet = {};
+    rawNodes.forEach(function(n){ if(n.grupo) grupoSet[n.grupo] = true; });
+    optionsCache.grupos = Object.keys(grupoSet).sort(function(a,b){ return a.localeCompare(b, "pt-BR"); })
+      .map(function(g){ return { value: g, label: g }; });
+
+    optionsCache.relacoes = Object.keys(EDGE_LABELS).map(function(t){ return { value: t, label: EDGE_LABELS[t] }; });
+  }
+
+  function rebuildFilterPanelsUI(){
+    buildFilterPanel("panel-tipo", optionsCache.tipos, state.tipos, refreshViews, function(v){ return TYPE_COLORS[v].color; });
+    buildFilterPanel("panel-relevancia", optionsCache.relevancias, state.relevancias, refreshViews);
+    buildFilterPanel("panel-prioridade", optionsCache.prioridades, state.prioridades, refreshViews);
+    buildFilterPanel("panel-grupo", optionsCache.grupos, state.grupos, refreshViews);
+    buildFilterPanel("panel-relacao", optionsCache.relacoes, state.relacoes, refreshViews, function(v){ return EDGE_COLORS[v]; });
+  }
+
+  function initFilterPanels(){
+    computeOptionsCache();
+    setAll(state.tipos, optionsCache.tipos);
+    setAll(state.relevancias, optionsCache.relevancias);
+    setAll(state.prioridades, optionsCache.prioridades);
+    setAll(state.grupos, optionsCache.grupos);
+    setAll(state.relacoes, optionsCache.relacoes);
+    rebuildFilterPanelsUI();
+  }
+
+  function clearPresetButtons(){
+    document.getElementById("btn-proposicoes").classList.remove("active");
+    document.getElementById("btn-normas").classList.remove("active");
+    document.getElementById("btn-pautas").classList.remove("active");
+    state.onlyPautaNetwork = false;
+  }
+
+  function resetAllFilters(){
+    document.getElementById("searchInput").value = "";
+    state.search = "";
+    state.hideWeak = false;
+    document.getElementById("btn-hideweak").classList.remove("active");
+    clearPresetButtons();
+    setAll(state.tipos, optionsCache.tipos);
+    setAll(state.relevancias, optionsCache.relevancias);
+    setAll(state.prioridades, optionsCache.prioridades);
+    setAll(state.grupos, optionsCache.grupos);
+    setAll(state.relacoes, optionsCache.relacoes);
+    rebuildFilterPanelsUI();
+    refreshViews();
+    network.fit({ animation: true });
+  }
+
+  function wireToolbar(){
+    document.getElementById("searchInput").addEventListener("input", function(e){
+      state.search = normalize(e.target.value);
+      refreshViews();
+    });
+
+    document.getElementById("btn-showall").addEventListener("click", resetAllFilters);
+
+    document.getElementById("btn-hideweak").addEventListener("click", function(){
+      state.hideWeak = !state.hideWeak;
+      this.classList.toggle("active", state.hideWeak);
+      refreshViews();
+    });
+
+    document.getElementById("btn-proposicoes").addEventListener("click", function(){
+      var turningOn = !this.classList.contains("active");
+      clearPresetButtons();
+      state.search = "";
+      document.getElementById("searchInput").value = "";
+      setAll(state.grupos, optionsCache.grupos);
+      setAll(state.relacoes, optionsCache.relacoes);
+      if(turningOn){
+        state.tipos.clear();
+        state.tipos.add("proposicao");
+        setAll(state.relevancias, optionsCache.relevancias);
+        state.prioridades.clear();
+        optionsCache.prioridades.forEach(function(o){
+          if(o.value === "alta" || o.value === "urgente") state.prioridades.add(o.value);
+        });
+        this.classList.add("active");
+      } else {
+        setAll(state.tipos, optionsCache.tipos);
+        setAll(state.relevancias, optionsCache.relevancias);
+        setAll(state.prioridades, optionsCache.prioridades);
+      }
+      rebuildFilterPanelsUI();
+      refreshViews();
+    });
+
+    document.getElementById("btn-normas").addEventListener("click", function(){
+      var turningOn = !this.classList.contains("active");
+      clearPresetButtons();
+      state.search = "";
+      document.getElementById("searchInput").value = "";
+      setAll(state.grupos, optionsCache.grupos);
+      setAll(state.relacoes, optionsCache.relacoes);
+      if(turningOn){
+        state.tipos.clear();
+        state.tipos.add("norma");
+        setAll(state.prioridades, optionsCache.prioridades);
+        state.relevancias.clear();
+        optionsCache.relevancias.forEach(function(o){
+          if(o.value === "critica") state.relevancias.add(o.value);
+        });
+        this.classList.add("active");
+      } else {
+        setAll(state.tipos, optionsCache.tipos);
+        setAll(state.relevancias, optionsCache.relevancias);
+        setAll(state.prioridades, optionsCache.prioridades);
+      }
+      rebuildFilterPanelsUI();
+      refreshViews();
+    });
+
+    document.getElementById("btn-pautas").addEventListener("click", function(){
+      var turningOn = !this.classList.contains("active");
+      clearPresetButtons();
+      state.search = "";
+      document.getElementById("searchInput").value = "";
+      setAll(state.tipos, optionsCache.tipos);
+      setAll(state.relevancias, optionsCache.relevancias);
+      setAll(state.prioridades, optionsCache.prioridades);
+      setAll(state.grupos, optionsCache.grupos);
+      setAll(state.relacoes, optionsCache.relacoes);
+      if(turningOn){
+        state.onlyPautaNetwork = true;
+        this.classList.add("active");
+      }
+      rebuildFilterPanelsUI();
+      refreshViews();
+      network.fit({ animation: true });
+    });
+
+    document.getElementById("btn-reset").addEventListener("click", function(){
+      network.fit({ animation: true });
+    });
+
+    document.querySelectorAll("details.filter-group").forEach(function(d){
+      d.addEventListener("toggle", function(){
+        if(d.open){
+          document.querySelectorAll("details.filter-group").forEach(function(other){
+            if(other !== d) other.open = false;
+          });
+        }
+      });
+    });
+    document.addEventListener("click", function(e){
+      document.querySelectorAll("details.filter-group").forEach(function(d){
+        if(d.open && !d.contains(e.target)) d.open = false;
+      });
+    });
+  }
+
+  function toVisNode(n){
+    var colors = TYPE_COLORS[n.tipo] || TYPE_COLORS.ator;
+    var borderColor = colors.color;
+    var borderWidth = 1.5;
+    var relN = normalize(n.relevancia);
+    var priN = normalize(n.prioridade);
+    if(relN === "critica" || priN === "urgente"){
+      borderColor = "#b0304f";
+      borderWidth = 3;
+    } else if(relN === "alta" || priN === "alta"){
+      borderWidth = 2.5;
+    }
+    var size = TYPE_BASE_SIZE[n.tipo] || 14;
+    var shape = (n.tipo === "pauta") ? "star" : "dot";
+
+    return {
+      id: n.id,
+      label: n.label,
+      tipo: n.tipo,
+      grupo: n.grupo,
+      descricao: n.descricao,
+      relevancia: n.relevancia,
+      prioridade: n.prioridade,
+      shape: shape,
+      size: size,
+      color: {
+        background: colors.color,
+        border: borderColor,
+        highlight: { background: colors.color, border: "#c8a85a" },
+        hover: { background: colors.color, border: "#c8a85a" }
+      },
+      borderWidth: borderWidth,
+      font: { color: "#18201c", size: 12, face: "Inter, sans-serif" },
+      title: n.label + (n.descricao ? "\n" + n.descricao : "")
+    };
+  }
+
+  function toVisEdge(e){
+    var color = EDGE_COLORS[e.tipo] || "#999";
+    return {
+      id: e.id,
+      from: e.source,
+      to: e.target,
+      source: e.source,
+      target: e.target,
+      tipo: e.tipo,
+      peso: e.peso,
+      descricao: e.descricao,
+      width: Math.max(1, e.peso),
+      color: { color: color, highlight: "#c8a85a", hover: color, opacity: 0.75 },
+      arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+      smooth: { type: "dynamic" }
+    };
+  }
+
+  function initNetwork(){
+    nodesDataSet = new vis.DataSet(rawNodes.map(toVisNode));
+    edgesDataSet = new vis.DataSet(rawEdges.map(toVisEdge));
+
+    nodesView = new vis.DataView(nodesDataSet, { filter: nodeVisible });
+    edgesView = new vis.DataView(edgesDataSet, { filter: edgeVisible });
+
+    var container = document.getElementById("network");
+    var data = { nodes: nodesView, edges: edgesView };
+    var options = {
+      layout: { improvedLayout: true },
+      physics: {
+        solver: "forceAtlas2Based",
+        forceAtlas2Based: { gravitationalConstant: -70, springLength: 110, springConstant: 0.06, damping: 0.4 },
+        stabilization: { iterations: 200 }
+      },
+      interaction: { hover: true, tooltipDelay: 150, navigationButtons: true, keyboard: true },
+      nodes: { shadow: { enabled: true, size: 6, x: 1, y: 2 } },
+      edges: { shadow: false, selectionWidth: 2 }
+    };
+    network = new vis.Network(container, data, options);
+
+    network.on("click", function(params){
+      if(params.nodes.length){
+        var node = nodesDataSet.get(params.nodes[0]);
+        if(node) showNodePanel(node);
+      } else if(params.edges.length){
+        var edge = edgesDataSet.get(params.edges[0]);
+        if(edge) showEdgePanel(edge);
+      } else {
+        showEmptyPanel();
+      }
+    });
+
+    network.once("stabilizationIterationsDone", function(){
+      document.getElementById("loading").style.display = "none";
+      network.fit();
+      updateCountBar();
+    });
+
+    var stabTimeout = setTimeout(function(){
+      document.getElementById("loading").style.display = "none";
+    }, 6000);
+    network.on("stabilizationIterationsDone", function(){ clearTimeout(stabTimeout); });
+  }
+
+  function loadData(){
+    fetch("./grafo-cfta.json")
+      .then(function(res){
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function(json){
+        rawNodes = json.nodes || [];
+        rawEdges = json.edges || [];
+        pautaNeighborIds = computePautaNeighborIds();
+        document.getElementById("status").textContent =
+          rawNodes.length + " nós · " + rawEdges.length + " relações — carregado com sucesso";
+        initFilterPanels();
+        initNetwork();
+        wireToolbar();
+        refreshViews();
+      })
+      .catch(function(err){
+        document.getElementById("loading").innerHTML =
+          '<div style="max-width:420px;text-align:center;color:#a43f39;font-weight:700">' +
+          'Não foi possível carregar ./grafo-cfta.json.<br/><br/>' +
+          'Abra este arquivo através de um servidor local (ex.: Live Server) a partir da pasta <code>output/</code>, ' +
+          'pois navegadores bloqueiam fetch() em arquivos abertos diretamente (file://).<br/><br/>' +
+          '<span style="font-weight:400;font-size:11px">Erro técnico: ' + escapeHtml(err.message) + '</span>' +
+          '</div>';
+        document.getElementById("status").textContent = "Erro ao carregar dados";
+      });
+  }
+
+  loadData();
+})();
+</script>
+</body>
+</html>
